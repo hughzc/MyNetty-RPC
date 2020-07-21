@@ -18,6 +18,7 @@ import java.lang.reflect.Proxy;
 import java.util.UUID;
 
 // 封装网络细节，通过动态代理生成代理类
+// TODO 增加线程池来处理请求
 public class RpcProxy implements InvocationHandler{
     private String serverAddress;
     private ServiceDiscovery serviceDiscovery;

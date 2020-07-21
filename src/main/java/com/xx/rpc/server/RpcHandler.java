@@ -8,6 +8,7 @@ package com.xx.rpc.server;
 
 import com.xx.rpc.protocol.RpcRequest;
 import com.xx.rpc.protocol.RpcResponse;
+import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -28,15 +29,26 @@ public class RpcHandler extends SimpleChannelInboundHandler<RpcRequest> {
     }
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, RpcRequest request) throws Exception {
-        RpcResponse response = new RpcResponse();
-        response.setRequestId(request.getRequestId());
-        try {
-            Object result = handler(request);
-            response.setResult(result);
-        } catch (Throwable t) {
-            response.setError(t.toString());
-        }
-        ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
+        // 使用线程池来执行任务
+        RpcServer.submit(new Runnable() {
+            @Override
+            public void run() {
+                RpcResponse response = new RpcResponse();
+                response.setRequestId(request.getRequestId());
+                try {
+                    Object result = handler(request);
+                    response.setResult(result);
+                } catch (Throwable t) {
+                    response.setError(t.toString());
+                }
+                ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE).addListener(new ChannelFutureListener() {
+                    @Override
+                    public void operationComplete(ChannelFuture future) throws Exception {
+                        logger.info("Send response for request " + request.getRequestId());
+                    }
+                });
+            }
+        });
     }
 
     private Object handler(RpcRequest request) throws Throwable {

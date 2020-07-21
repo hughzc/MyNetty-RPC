@@ -29,6 +29,9 @@ import org.springframework.context.ApplicationContextAware;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 public class RpcServer implements ApplicationContextAware, InitializingBean {
     private static final Logger logger = LoggerFactory.getLogger(RpcServer.class);
@@ -38,6 +41,9 @@ public class RpcServer implements ApplicationContextAware, InitializingBean {
     private String serverAddress;
 
     private ServiceRegistry serviceRegistry;// IOC注入
+
+    // TODO 添加线程池去处理，不用每次来个客户端请求就进行一次新的连接
+    private static ThreadPoolExecutor threadPoolExecutor;
 
     public RpcServer(String serverAddress, ServiceRegistry serviceRegistry){
         this.serverAddress = serverAddress;
@@ -101,6 +107,19 @@ public class RpcServer implements ApplicationContextAware, InitializingBean {
             workerGroup.shutdownGracefully();
             bossGroup.shutdownGracefully();
         }
+    }
 
+    // 使用线程池来执行任务
+    // lazy load加载
+    public static void submit(Runnable task){
+        if (threadPoolExecutor == null){
+            synchronized (RpcServer.class){
+                if (threadPoolExecutor == null){
+                    threadPoolExecutor = new ThreadPoolExecutor(16,16,600L, TimeUnit.SECONDS,
+                            new ArrayBlockingQueue<Runnable>(65536));
+                }
+            }
+        }
+        threadPoolExecutor.submit(task);
     }
 }

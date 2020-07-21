@@ -18,6 +18,8 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.concurrent.CountDownLatch;
+
 public class RpcClient extends SimpleChannelInboundHandler<RpcResponse> {
     private static final Logger logger = LoggerFactory.getLogger(RpcClient.class);
 
@@ -27,7 +29,7 @@ public class RpcClient extends SimpleChannelInboundHandler<RpcResponse> {
 
     private RpcResponse response;
 
-    private final Object object = new Object();
+    private CountDownLatch latch = new CountDownLatch(1);
 
     public RpcClient(String host, int port){
         this.host = host;
@@ -38,9 +40,8 @@ public class RpcClient extends SimpleChannelInboundHandler<RpcResponse> {
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, RpcResponse response) throws Exception {
         this.response = response;
-        synchronized (object){
-            object.notifyAll();
-        }
+        // 进行计数
+        latch.countDown();
     }
 
     public RpcResponse send(RpcRequest request) throws InterruptedException {
@@ -61,9 +62,10 @@ public class RpcClient extends SimpleChannelInboundHandler<RpcResponse> {
             ChannelFuture future = bootstrap.connect(host,port).sync();//阻塞住
             future.channel().writeAndFlush(request).sync();
 
-            synchronized (object){
-                object.wait();// 未收到相应就等待
-            }
+            logger.info("Waiting for response from request "+request.getRequestId());
+            // 避免在没有拿到response就进行了返回
+            latch.await();
+            logger.info("receive response from request "+request.getRequestId());
             if (response != null){
                 future.channel().closeFuture().sync();
             }
